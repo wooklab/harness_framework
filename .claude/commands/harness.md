@@ -30,26 +30,7 @@
 
 사용자가 승인하면 아래 파일들을 생성한다.
 
-#### D-1. `phases/index.json` (전체 현황)
-
-여러 task를 관리하는 top-level 인덱스. 이미 존재하면 `phases` 배열에 새 항목을 추가한다.
-
-```json
-{
-  "phases": [
-    {
-      "dir": "0-mvp",
-      "status": "pending"
-    }
-  ]
-}
-```
-
-- `dir`: task 디렉토리명.
-- `status`: `"pending"` | `"completed"` | `"error"` | `"blocked"`. execute.py가 실행 중 자동으로 업데이트한다.
-- 타임스탬프(`completed_at`, `failed_at`, `blocked_at`)는 execute.py가 상태 변경 시 자동 기록한다. 생성 시 넣지 않는다.
-
-#### D-2. `phases/{task-name}/index.json` (task 상세)
+#### D-1. `phases/{task-name}/index.json` (task 상세)
 
 ```json
 {
@@ -83,7 +64,7 @@
 
 `created_at`은 execute.py가 최초 실행 시 task 레벨에 한 번만 기록한다. step 레벨의 `started_at`도 execute.py가 각 step 시작 시 자동 기록한다. 생성 시 넣지 않는다.
 
-#### D-3. `phases/{task-name}/step{N}.md` (각 step마다 1개)
+#### D-2. `phases/{task-name}/step{N}.md` (각 step마다 1개)
 
 ```markdown
 # Step {N}: {이름}
