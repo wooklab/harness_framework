@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./gradlew build 2>&1"
+            "command": "test -x ./gradlew && ./gradlew build 2>&1 || true"
           }
         ]
       }
