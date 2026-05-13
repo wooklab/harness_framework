@@ -339,7 +339,7 @@ class TestCheckoutBranch:
 
     def test_already_on_branch(self, executor):
         self._mock_git(executor, [
-            MagicMock(returncode=0, stdout="feat-mvp\n", stderr=""),
+            MagicMock(returncode=0, stdout="feature/mvp\n", stderr=""),
         ])
         executor._checkout_branch()  # should return without checkout
 
@@ -397,7 +397,7 @@ class TestCommitStep:
         commit_calls = [c for c in calls if c[0] == "commit"]
         assert len(commit_calls) == 2
         assert "feat(mvp):" in commit_calls[0][2]
-        assert "chore(mvp):" in commit_calls[1][2]
+        assert "docs(mvp):" in commit_calls[1][2]
 
     def test_no_code_changes_skips_feat_commit(self, executor):
         call_count = {"diff": 0}
@@ -416,7 +416,7 @@ class TestCommitStep:
 
         commit_msgs = [c[2] for c in calls if c[0] == "commit"]
         assert len(commit_msgs) == 1
-        assert "chore" in commit_msgs[0]
+        assert "docs" in commit_msgs[0]
 
 
 # ---------------------------------------------------------------------------

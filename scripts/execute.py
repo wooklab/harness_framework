@@ -54,8 +54,6 @@ class StepExecutor:
     """Phase 디렉토리 안의 step들을 순차 실행하는 하네스."""
 
     MAX_RETRIES = 3
-    FEAT_MSG = "feat({phase}): step {num} — {name}"
-    CHORE_MSG = "chore({phase}): step {num} output"
     TZ = timezone(timedelta(hours=9))
 
     def __init__(self, phase_dir_name: str, *, auto_push: bool = False):
@@ -78,6 +76,7 @@ class StepExecutor:
         idx = self._read_json(self._index_file)
         self._project = idx.get("project", "project")
         self._phase_name = idx.get("phase", phase_dir_name)
+        self._ticket = idx.get("ticket", self._phase_name)
         self._total = len(idx["steps"])
 
     def run(self):
@@ -111,7 +110,7 @@ class StepExecutor:
         return subprocess.run(cmd, cwd=self._root, capture_output=True, text=True)
 
     def _checkout_branch(self):
-        branch = f"feat-{self._phase_name}"
+        branch = f"feature/{self._ticket}"
 
         r = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
         if r.returncode != 0:
@@ -142,7 +141,7 @@ class StepExecutor:
         self._run_git("reset", "HEAD", "--", index_rel)
 
         if self._run_git("diff", "--cached", "--quiet").returncode != 0:
-            msg = self.FEAT_MSG.format(phase=self._phase_name, num=step_num, name=step_name)
+            msg = f"feat({self._ticket}): step {step_num} {step_name}"
             r = self._run_git("commit", "-m", msg)
             if r.returncode == 0:
                 print(f"  Commit: {msg}")
@@ -151,7 +150,7 @@ class StepExecutor:
 
         self._run_git("add", "-A")
         if self._run_git("diff", "--cached", "--quiet").returncode != 0:
-            msg = self.CHORE_MSG.format(phase=self._phase_name, num=step_num)
+            msg = f"docs({self._ticket}): step {step_num} output"
             r = self._run_git("commit", "-m", msg)
             if r.returncode != 0:
                 print(f"  WARN: housekeeping 커밋 실패: {r.stderr.strip()}")
@@ -198,9 +197,7 @@ class StepExecutor:
 
     def _build_preamble(self, guardrails: str, step_context: str,
                         prev_error: Optional[str] = None) -> str:
-        commit_example = self.FEAT_MSG.format(
-            phase=self._phase_name, num="N", name="<step-name>"
-        )
+        commit_example = f"feat({self._ticket}): step N <step-name>"
         retry_section = ""
         if prev_error:
             retry_section = (
@@ -386,13 +383,13 @@ class StepExecutor:
 
         self._run_git("add", "-A")
         if self._run_git("diff", "--cached", "--quiet").returncode != 0:
-            msg = f"chore({self._phase_name}): mark phase completed"
+            msg = f"docs({self._ticket}): phase {self._phase_name} 완료"
             r = self._run_git("commit", "-m", msg)
             if r.returncode == 0:
                 print(f"  ✓ {msg}")
 
         if self._auto_push:
-            branch = f"feat-{self._phase_name}"
+            branch = f"feature/{self._ticket}"
             r = self._run_git("push", "-u", "origin", branch)
             if r.returncode != 0:
                 print(f"\n  ERROR: git push 실패: {r.stderr.strip()}")
