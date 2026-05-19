@@ -38,10 +38,35 @@
   "phase": "<ticket-no>",
   "ticket": "<ticket-no>",
   "steps": [
-    { "step": 0, "name": "project-setup", "status": "pending" },
-    { "step": 1, "name": "domain-model", "status": "pending" },
-    { "step": 2, "name": "api-layer", "status": "pending" }
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "pending",
+    },
+    {
+      "step": 1,
+      "name": "domain-model",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "api-layer",
+      "status": "pending"
+    }
   ]
+}
+```
+
+완료된 step 예시:
+
+```json
+{
+  "step": 0,
+  "name": "project-setup",
+  "status": "completed",
+  "started_at": "2026-05-13T12:16:32+0900",
+  "summary": "산출물 한 줄 요약",
+  "completed_at": "2026-05-13T12:45:10+0900"
 }
 ```
 
@@ -53,11 +78,15 @@
 - `steps[].step`: 0부터 시작하는 순번.
 - `steps[].name`: kebab-case slug.
 - `steps[].status`: 초기값은 모두 `"pending"`.
+- `steps[].started_at`: step 실행 시작 시각. 포맷: `"YYYY-MM-DDTHH:mm:ss+0900"`.
+- `steps[].completed_at` / `failed_at` / `blocked_at`: 종료 시각. 동일 포맷.
+- **필드 순서**: `step` → `name` → `status` → `started_at` → `summary`(또는 `error_message`/`blocked_reason`) → `completed_at`(또는 `failed_at`/`blocked_at`) 순으로 직렬화한다.
 
 상태 전이와 자동 기록 필드:
 
 | 전이 | 기록되는 필드 | 기록 주체 |
 |------|-------------|----------|
+| → 실행 시작 | `started_at` | 오케스트레이터 |
 | → `completed` | `completed_at`, `summary` | 서브에이전트 (summary), 오케스트레이터 (timestamp) |
 | → `error` | `failed_at`, `error_message` | 서브에이전트 (message), 오케스트레이터 (timestamp) |
 | → `blocked` | `blocked_at`, `blocked_reason` | 서브에이전트 (reason), 오케스트레이터 (즉시 중단) |
@@ -111,12 +140,20 @@
 
 ### E. 실행
 
-사용자가 실행을 지시하면 아래 오케스트레이터 로직을 수행한다. 외부 스크립트 없이 이 세션이 직접 오케스트레이터 역할을 맡는다.
+사용자가 실행을 지시하면 아래 오케스트레이터 로직을 수행한다. 메인세션이 직접 오케스트레이터 역할을 맡는다.
+
+> **⛔ 단계 건너뜀 금지**: E-1 → E-2 → E-3(루프) → E-5 → E-6 순서를 반드시 지켜야 한다.
+> 각 단계는 선택사항이 아니다. 다음 단계로 넘어가기 전에 현재 단계가 완전히 끝났는지 확인하라.
+> 특히 아래 두 가지를 절대 건너뛰지 마라:
+> - **E-1**: 서브에이전트 스폰 전에 반드시 feature 브랜치가 존재해야 한다.
+> - **E-5**: step 완료 후 반드시 커밋이 이루어져야 다음 step으로 넘어갈 수 있다.
 
 #### E-1. 사전 준비
 
+아래 4가지를 순서대로 완료한 뒤에만 E-2로 넘어간다. 하나라도 빠지면 실행을 시작하지 마라.
+
 ```
-1. feature/{ticket-no} 브랜치로 checkout (없으면 생성)
+1. feature/{ticket-no} 브랜치로 checkout (없으면 생성) — git 명령어로 실제 실행하여 확인
 2. phases/{ticket-no}/index.json 읽기
 3. error/blocked 상태 step이 있으면 중단하고 사용자에게 보고
 4. created_at 없으면 현재 시각 기록
@@ -135,13 +172,15 @@
 
 pending step이 없을 때까지 반복한다:
 
+타임스탬프 포맷: `date '+%Y-%m-%dT%H:%M:%S+0900'` 으로 획득한 문자열 (예: `"2026-05-13T12:16:32+0900"`).
+
 ```
 while (pending step 존재):
     1. index.json에서 첫 번째 pending step 선택
-    2. started_at 기록
+    2. started_at 기록 (포맷: "YYYY-MM-DDTHH:mm:ss+0900")
     3. 서브에이전트 스폰 (아래 E-4 참조)
     4. index.json 재읽기 → 해당 step의 status 확인
-    5. completed → completed_at 기록 → 코드 커밋 → 다음 step
+    5. completed → completed_at 기록 → **E-5 커밋 수행 (필수, 건너뛰지 마라)** → 다음 step
        blocked  → blocked_at 기록 → 사용자에게 보고 후 중단
        error/pending → 재시도 카운터 증가
                        3회 초과 시 error 확정 + failed_at 기록 → 커밋 → 중단
