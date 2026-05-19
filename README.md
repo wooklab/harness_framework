@@ -5,15 +5,16 @@ Claude Code를 활용해 Java Spring Boot 프로젝트를 단계적으로 자동
 ## 동작 방식
 
 1. 작업을 여러 step으로 쪼개 `phases/` 디렉토리에 정의한다
-2. `execute.py`가 각 step을 Claude Code에 순차 전달한다
-3. Claude가 코드를 작성하고 `./gradlew build`로 검증한다
-4. 검증 실패 시 최대 3회 자동 재시도한다
-5. 성공하면 자동 커밋 후 다음 step으로 넘어간다
+2. `/phase-runner` 스킬이 각 step을 순차 실행한다 — 메인 세션이 오케스트레이션하고, 각 step의 구현은 `step-executor` 서브에이전트가 격리된 컨텍스트에서 수행한다
+3. 서브에이전트가 코드를 작성하고 `./gradlew build`로 검증한다
+4. 검증 실패 시 메인 세션이 AC를 재실행해 거짓 완료를 차단하며, 최대 3회까지 자동 재시도한다
+5. 성공하면 메인 세션이 자동 커밋 후 다음 step으로 넘어간다
+
+> 과거 `scripts/execute.py`는 `claude -p`를 사용해 동일한 흐름을 구현했으나, `claude -p` 사용량이 구독에서 분리되면서 **deprecated** 되었다. 스킬 기반 흐름을 사용하라.
 
 ## 사전 요구사항
 
-- [Claude Code](https://claude.ai/code) CLI 설치
-- Python 3
+- [Claude Code](https://claude.ai/code) CLI
 - Java Spring Boot 프로젝트 (Gradle Wrapper 포함)
 
 ## 설치
@@ -24,7 +25,6 @@ Claude Code를 활용해 Java Spring Boot 프로젝트를 단계적으로 자동
 git clone https://github.com/wooklab/harness_framework.git
 cp -r harness_framework/.claude        my-project/
 cp -r harness_framework/docs           my-project/
-cp -r harness_framework/scripts        my-project/
 cp    harness_framework/CLAUDE.md      my-project/
 ```
 
@@ -54,13 +54,13 @@ ADR-001(언어·버전), ADR-002(아키텍처 패턴), ADR-003(영속성), ADR-0
 
 ADR-002에서 선택한 패턴(Layered / Hexagonal / DDD) 기준으로 옵션 A/B/C 중 하나만 남기고 나머지를 삭제한다.
 
-> `docs/PRD.md`는 프로젝트 목표와 핵심 기능을 기술한다. Claude가 매 step마다 컨텍스트로 읽는다.
+> `docs/PRD.md`는 프로젝트 목표와 핵심 기능을 기술한다. step-executor가 매 step마다 컨텍스트로 읽는다.
 
 ## 사용법
 
-### Step 1. Phase 설계 — `/harness`
+### Step 1. Phase 설계 — `/phase-runner`
 
-Claude Code에서 `/harness`를 입력하면 Claude가 `docs/`를 읽고 구현 계획을 제안한다.
+Claude Code에서 `/phase-runner`를 입력하면 Claude가 `docs/`를 읽고 구현 계획을 제안한다.
 승인하면 아래 파일들을 자동 생성한다.
 
 ```
@@ -71,20 +71,24 @@ phases/
     └── step1.md
 ```
 
-### Step 2. 실행 — `execute.py`
+### Step 2. 실행 — `/phase-runner {ticket}`
 
-```bash
-python3 scripts/execute.py PROJ-1234          # 순차 실행
-python3 scripts/execute.py PROJ-1234 --push   # 실행 후 원격 브랜치 push
+설계가 끝났으면 같은 `/phase-runner` 스킬에 티켓 번호를 주어 실행을 지시한다.
+
+```
+/phase-runner PROJ-1234           # 순차 실행
+/phase-runner PROJ-1234 --push    # 실행 후 원격 브랜치 push
 ```
 
 실행 시 자동으로 처리되는 것:
 
-- `feat-PROJ-1234` 브랜치 생성 및 checkout
-- `CLAUDE.md` + `docs/*.md` 를 매 step 프롬프트에 가드레일로 주입
+- `feature/PROJ-1234` 브랜치 생성 및 checkout (메인 세션)
+- `CLAUDE.md` + `docs/*.md` 를 매 step 서브에이전트 프롬프트에 가드레일로 주입
 - 완료된 step의 산출물 요약을 다음 step 컨텍스트로 누적 전달
-- 실패 시 최대 3회 자동 재시도
-- step 완료마다 자동 커밋
+- 각 step은 `step-executor` 서브에이전트가 격리된 컨텍스트에서 구현
+- 메인 세션이 AC 커맨드를 재실행해 거짓 완료 차단
+- 실패 시 이전 에러를 다음 시도에 주입하며 최대 3회 자동 재시도
+- step 완료마다 메인 세션이 자동 커밋 (코드 `feat` + 메타데이터 `docs` 분리)
 
 ### Step 3. 리뷰 — `/review`
 
@@ -100,17 +104,19 @@ python3 scripts/execute.py PROJ-1234 --push   # 실행 후 원격 브랜치 push
 my-project/
 ├── .claude/
 │   ├── settings.json          # hooks 설정
-│   └── commands/
-│       ├── harness.md         # /harness 슬래시 커맨드
-│       └── review.md          # /review 슬래시 커맨드
+│   ├── commands/
+│   │   ├── phase-runner.md    # /phase-runner 슬래시 커맨드 (오케스트레이터)
+│   │   └── review.md          # /review 슬래시 커맨드
+│   └── agents/
+│       └── step-executor.md   # step 실행 서브에이전트 정의
 ├── docs/
 │   ├── PRD.md                 # 프로젝트 목표·기능 정의
 │   ├── ADR.md                 # 기술 결정 기록
 │   ├── ARCHITECTURE.md        # 디렉토리 구조·패턴·데이터 흐름
 │   └── API_GUIDE.md           # REST API 설계 규약
 ├── scripts/
-│   ├── execute.py             # 오케스트레이터
-│   └── test_execute.py        # 단위 테스트
+│   ├── execute.py             # [DEPRECATED] 과거 오케스트레이터
+│   └── test_execute.py
 ├── phases/
 │   └── PROJ-1234/
 │       ├── index.json
@@ -131,12 +137,8 @@ my-project/
 
 ## 에러 복구
 
-step 실패 시 `phases/PROJ-1234/index.json`에서 해당 step의 `status`를 `"pending"`으로 변경하고 재실행한다.
+step 실패 시 `phases/PROJ-1234/index.json`에서 해당 step의 `status`를 `"pending"`으로 변경하고 `error_message`(또는 `blocked_reason`)를 지운 뒤 `/phase-runner PROJ-1234`를 재호출한다.
 
 ```json
 { "step": 1, "name": "domain-model", "status": "pending" }
-```
-
-```bash
-python3 scripts/execute.py PROJ-1234
 ```

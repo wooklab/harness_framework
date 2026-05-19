@@ -2,6 +2,12 @@
 """
 Harness Step Executor — phase 내 step을 순차 실행하고 자가 교정한다.
 
+DEPRECATED: `claude -p` 사용량이 구독에서 분리되면서 이 스크립트는 더 이상 권장되지 않는다.
+대신 `/phase-runner` 스킬을 사용하라. 스킬이 메인 세션에서 직접 오케스트레이션하고
+각 step은 `step-executor` 서브에이전트(.claude/agents/step-executor.md)로 격리 실행한다.
+
+이 파일은 과거 phase 디렉토리 호환·디버깅 용도로만 남아 있다.
+
 Usage:
     python3 scripts/execute.py <phase-dir> [--push]
 """
