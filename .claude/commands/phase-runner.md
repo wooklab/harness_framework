@@ -38,10 +38,35 @@
   "phase": "<ticket-no>",
   "ticket": "<ticket-no>",
   "steps": [
-    { "step": 0, "name": "project-setup", "status": "pending" },
-    { "step": 1, "name": "domain-model", "status": "pending" },
-    { "step": 2, "name": "api-layer", "status": "pending" }
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "pending",
+    },
+    {
+      "step": 1,
+      "name": "domain-model",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "api-layer",
+      "status": "pending"
+    }
   ]
+}
+```
+
+완료된 step 예시:
+
+```json
+{
+  "step": 0,
+  "name": "project-setup",
+  "status": "completed",
+  "started_at": "2026-05-13T12:16:32+0900",
+  "summary": "산출물 한 줄 요약",
+  "completed_at": "2026-05-13T12:45:10+0900"
 }
 ```
 
