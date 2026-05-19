@@ -5,15 +5,15 @@ Claude Code를 활용해 Java Spring Boot 프로젝트를 단계적으로 자동
 ## 동작 방식
 
 1. 작업을 여러 step으로 쪼개 `phases/` 디렉토리에 정의한다
-2. `execute.py`가 각 step을 Claude Code에 순차 전달한다
-3. Claude가 코드를 작성하고 `./gradlew build`로 검증한다
-4. 검증 실패 시 최대 3회 자동 재시도한다
-5. 성공하면 자동 커밋 후 다음 step으로 넘어간다
+2. `/harness` 슬래시 커맨드를 실행하면 Claude Code 세션이 오케스트레이터 역할을 맡는다
+3. 각 step마다 격리된 서브에이전트를 스폰해 컨텍스트 오염 없이 실행한다
+4. Claude가 코드를 작성하고 `./gradlew build`로 검증한다
+5. 검증 실패 시 최대 3회 자동 재시도한다
+6. 성공하면 자동 커밋 후 다음 step으로 넘어간다
 
 ## 사전 요구사항
 
 - [Claude Code](https://claude.ai/code) CLI 설치
-- Python 3
 - Java Spring Boot 프로젝트 (Gradle Wrapper 포함)
 
 ## 설치
@@ -24,7 +24,6 @@ Claude Code를 활용해 Java Spring Boot 프로젝트를 단계적으로 자동
 git clone https://github.com/wooklab/harness_framework.git
 cp -r harness_framework/.claude        my-project/
 cp -r harness_framework/docs           my-project/
-cp -r harness_framework/scripts        my-project/
 cp    harness_framework/CLAUDE.md      my-project/
 ```
 
@@ -71,19 +70,21 @@ phases/
     └── step1.md
 ```
 
-### Step 2. 실행 — `execute.py`
+### Step 2. 실행 — `/harness`
 
-```bash
-python3 scripts/execute.py PROJ-1234          # 순차 실행
-python3 scripts/execute.py PROJ-1234 --push   # 실행 후 원격 브랜치 push
+Claude Code에서 다시 `/harness`를 입력하고 실행을 지시한다.
+
+```
+/harness PROJ-1234 실행해줘
 ```
 
 실행 시 자동으로 처리되는 것:
 
-- `feat-PROJ-1234` 브랜치 생성 및 checkout
-- `CLAUDE.md` + `docs/*.md` 를 매 step 프롬프트에 가드레일로 주입
-- 완료된 step의 산출물 요약을 다음 step 컨텍스트로 누적 전달
-- 실패 시 최대 3회 자동 재시도
+- `feature/PROJ-1234` 브랜치 생성 및 checkout
+- `CLAUDE.md` + `docs/*.md` 를 매 step 서브에이전트 프롬프트에 가드레일로 주입
+- 완료된 step의 산출물 요약을 다음 step 서브에이전트 컨텍스트로 누적 전달
+- 각 step을 격리된 서브에이전트로 실행해 컨텍스트 오염 방지
+- 실패 시 최대 3회 자동 재시도 (이전 에러 메시지 피드백)
 - step 완료마다 자동 커밋
 
 ### Step 3. 리뷰 — `/review`
@@ -101,16 +102,13 @@ my-project/
 ├── .claude/
 │   ├── settings.json          # hooks 설정
 │   └── commands/
-│       ├── harness.md         # /harness 슬래시 커맨드
+│       ├── harness.md         # /harness 슬래시 커맨드 (설계 + 실행 오케스트레이터)
 │       └── review.md          # /review 슬래시 커맨드
 ├── docs/
 │   ├── PRD.md                 # 프로젝트 목표·기능 정의
 │   ├── ADR.md                 # 기술 결정 기록
 │   ├── ARCHITECTURE.md        # 디렉토리 구조·패턴·데이터 흐름
 │   └── API_GUIDE.md           # REST API 설계 규약
-├── scripts/
-│   ├── execute.py             # 오케스트레이터
-│   └── test_execute.py        # 단위 테스트
 ├── phases/
 │   └── PROJ-1234/
 │       ├── index.json
@@ -131,12 +129,8 @@ my-project/
 
 ## 에러 복구
 
-step 실패 시 `phases/PROJ-1234/index.json`에서 해당 step의 `status`를 `"pending"`으로 변경하고 재실행한다.
+step 실패 시 `phases/PROJ-1234/index.json`에서 해당 step의 `status`를 `"pending"`으로 변경하고 `/harness`를 재실행한다.
 
 ```json
 { "step": 1, "name": "domain-model", "status": "pending" }
-```
-
-```bash
-python3 scripts/execute.py PROJ-1234
 ```

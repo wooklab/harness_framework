@@ -6,3 +6,6 @@ scheduled_tasks.lock
 # phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json
+
+# logs
+*.log
